@@ -286,8 +286,8 @@ class AFD2022:
                     {"$set": {"next_at": account.next_at.replace(tzinfo=None)}},
                 )
 
-                # avoid hammering pixels
-                await asyncio.sleep(randint(5, 10))
+                # avoid runaway loop
+                await asyncio.sleep(0.1)
 
             except:
                 traceback.print_exc()
