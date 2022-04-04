@@ -1,0 +1,14 @@
+version: '3'
+
+services:
+    web:
+        build:
+            dockerfile: Dockerfile
+            context: .
+        environment:
+            - UVICORN_SERVER_HEADER=0
+            - UVICORN_DATE_HEADER=0
+        env_file:
+            - .env
+        ports:
+            - "8000:8000"
