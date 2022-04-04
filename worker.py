@@ -358,7 +358,7 @@ class AFD2022:
         while True:
             try:
                 async with self.session.get(
-                    "https://cdn.discordapp.com/attachments/958335542989324308/960600729935048784/unknown_1.png"
+                    "https://cdn.discordapp.com/attachments/958335542989324308/960615424083517490/PlaceStart_XP_Template_v48.png"
                 ) as r:
                     img_data = BytesIO(await r.content.read())
                     img_data.seek(0)
