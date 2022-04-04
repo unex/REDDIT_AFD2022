@@ -313,7 +313,13 @@ class AFD2022:
         async with self.proxy.post(
             f"https://{MONA_LISA_URI}",
             raise_for_status=True,
-            headers={**fheader.generate(), "Authorization": f"Bearer {token}"},
+            headers={
+                **fheader.generate(),
+                "Authorization": f"Bearer {token}",
+                "origin": "https://hot-potato.reddit.com",
+                "referer": "https://hot-potato.reddit.com/",
+                "apollographql-client-name": "mona-lisa",
+            },
             json={
                 "operationName": "setPixel",
                 "variables": {
