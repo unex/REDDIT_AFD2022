@@ -264,11 +264,6 @@ class AFD2022:
                         f"{account.name} placed pixel {(pixel.canvas.dx + pixel.x, pixel.canvas.dy + pixel.y)}, next_at {account.next_at}"
                     )
 
-                    await self.db.accounts.find_one_and_update(
-                        {"id": account.id},
-                        {"$set": {"next_at": account.next_at.replace(tzinfo=None)}},
-                    )
-
                     await self.db.pixels.insert_one(
                         {
                             "x": pixel.canvas.dx + pixel.x,
@@ -281,6 +276,11 @@ class AFD2022:
 
                 except PixelPlaceException as e:
                     print(f"pixel place error: {e}")
+
+                await self.db.accounts.find_one_and_update(
+                    {"id": account.id},
+                    {"$set": {"next_at": account.next_at.replace(tzinfo=None)}},
+                )
 
                 await asyncio.sleep(random() * 10)
 
