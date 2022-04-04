@@ -456,7 +456,7 @@ class AFD2022:
                                                     "channel": {
                                                         "teamOwner": "AFD2022",
                                                         "category": "CANVAS",
-                                                        "tag": "0",
+                                                        "tag": str(i),
                                                     }
                                                 }
                                             },
@@ -518,7 +518,7 @@ class AFD2022:
                             i = int(_id.replace("canvas", ""))
                             self.canvas[i].data = np.array(img)
 
-                            print("Loaded full frame")
+                            print(f"Loaded full frame {i}")
 
                     elif data["__typename"] == "DiffFrameMessageData":
                         url = data["name"]
