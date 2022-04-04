@@ -341,6 +341,8 @@ class AFD2022:
 
                     self.template = template
 
+                    print("Loaded template")
+
             except:
                 print("Error in update_template")
                 traceback.print_exc()
