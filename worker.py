@@ -1,7 +1,7 @@
 from datetime import datetime
-from lib2to3.pgen2 import token
 import os
 import asyncio
+import traceback
 
 from typing import List, Dict
 from io import BytesIO
@@ -84,6 +84,7 @@ class Pixel(BaseModel):
 
 class PixelPlaceException(Exception):
     pass
+
 
 class RedditAccount:
     def __init__(self, session, id, name, token, next_at) -> None:
@@ -216,8 +217,8 @@ class AFD2022:
             )
 
     async def pixel_loop(self):
-        try:
-            while True:
+        while True:
+            try:
                 if account := await self.get_next_account():
                     seconds = (
                         account.next_at.replace(tzinfo=tz.utc) - dt.now(tz.utc)
@@ -241,7 +242,8 @@ class AFD2022:
                     print(f"{account.name} next_at {next_at} ")
 
                     await self.db.accounts.find_one_and_update(
-                        {"id": account.id}, {"$set": {"next_at": next_at.replace(tzinfo=None)}}
+                        {"id": account.id},
+                        {"$set": {"next_at": next_at.replace(tzinfo=None)}},
                     )
 
                 else:
@@ -249,10 +251,8 @@ class AFD2022:
 
                 await asyncio.sleep(random() * 10)
 
-        except:
-            import traceback
-
-            traceback.print_exc()
+            except:
+                traceback.print_exc()
 
     def get_canvas_from_coords(self, coords: tuple) -> Canvas:
         return next(
@@ -263,7 +263,11 @@ class AFD2022:
             )
         )
 
-    @backoff.on_exception(backoff.expo, (aiohttp.ClientError, asyncio.exceptions.TimeoutError), max_tries=10)
+    @backoff.on_exception(
+        backoff.expo,
+        (aiohttp.ClientError, asyncio.exceptions.TimeoutError),
+        max_tries=10,
+    )
     async def place_pixel(self, account: RedditAccount, pixel: Pixel) -> None:
         token = await account.token()
 
