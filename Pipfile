@@ -12,8 +12,18 @@ fake-headers = "*"
 aiohttp-socks = "*"
 motor = "*"
 pytz = "*"
+fastapi = "*"
+gunicorn = "*"
+uvicorn = "*"
+itsdangerous = "*"
+backoff = "*"
 
 [dev-packages]
 
 [requires]
 python_version = "3.10"
+
+[scripts]
+dev = "uvicorn app:app --debug"
+web = "gunicorn -b 0.0.0.0:8000 -w 4 -k uvicorn.workers.UvicornH11Worker app:app"
+worker = "python worker.py"
