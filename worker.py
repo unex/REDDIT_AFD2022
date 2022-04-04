@@ -12,7 +12,7 @@ from random import random, sample
 
 import backoff
 import aiohttp
-from aiohttp import ClientSession, ClientTimeout, ClientWebSocketResponse, BasicAuth
+from aiohttp import ClientResponseError, ClientSession, ClientTimeout, ClientWebSocketResponse, BasicAuth
 from aiohttp_socks import ProxyConnector, ProxyConnectionError
 
 from fake_headers import Headers
@@ -203,7 +203,7 @@ class AFD2022:
 
     async def get_next_account(self):
         cur = self.db.accounts.find(
-            {"next_at": {"$lt": datetime.now(tz.utc) + timedelta(minutes=5)}}
+            {"refresh_token": {"$ne": None}}
         ).sort("next_at", 1)
 
         # print(await cur.to_list(10))
@@ -221,43 +221,72 @@ class AFD2022:
     async def pixel_loop(self):
         while True:
             try:
-                if account := await self.get_next_account():
-                    seconds = (
-                        account.next_at.replace(tzinfo=tz.utc) - dt.now(tz.utc)
-                    ).total_seconds()
+                account = await self.get_next_account()
 
-                    if seconds > 0:
-                        jitter = 5 + random() * 100
+                seconds = (
+                    account.next_at.replace(tzinfo=tz.utc) - dt.now(tz.utc)
+                ).total_seconds()
 
-                        wait = seconds + jitter
+                if seconds > 0:
+                    jitter = 5 + random() * 100
 
-                        print(
-                            f"Next: {account.name} at {account.next_at} ({int(wait)} seconds)"
-                        )
+                    wait = seconds + jitter
 
-                        await asyncio.sleep(wait)
+                    print(
+                        f"Next: {account.name} at {account.next_at} ({int(wait)} seconds)"
+                    )
 
-                    pixel = self.get_next_pixel()
+                    await asyncio.sleep(wait)
 
-                    if not pixel:
-                        print("No next pixel! Waiting...")
-                        await asyncio.sleep(30)
-                        continue
+                pixel = self.get_next_pixel()
 
-                    print(f"{account.name} next_at {next_at} ")
+                if not pixel:
+                    print("No next pixel! Waiting...")
+                    await asyncio.sleep(30)
+                    continue
+
+                try:
+                    await account.token()
+                except ClientResponseError as e:
+                    print(f"{account.name} failed to update token")
 
                     await self.db.accounts.find_one_and_update(
                         {"id": account.id},
-                        {"$set": {"next_at": next_at.replace(tzinfo=None)}},
+                        {"$set": {"refresh_token": None}}
                     )
 
-                else:
-                    await asyncio.sleep(60)
+                    continue
+
+                try:
+                    await self.place_pixel(account, pixel)
+
+                    print(
+                        f"{account.name} placed pixel {(pixel.canvas.dx + pixel.x, pixel.canvas.dy + pixel.y)}, next_at {account.next_at}"
+                    )
+
+                    await self.db.accounts.find_one_and_update(
+                        {"id": account.id},
+                        {"$set": {"next_at": account.next_at.replace(tzinfo=None)}},
+                    )
+
+                    await self.db.pixels.insert_one(
+                        {
+                            "x": pixel.canvas.dx + pixel.x,
+                            "y": pixel.canvas.dy + pixel.y,
+                            "color": pixel.color,
+                            "at": dt.utcnow(),
+                            "user_id": account.id,
+                        }
+                    )
+
+                except PixelPlaceException as e:
+                    print(f"pixel place error: {e}")
 
                 await asyncio.sleep(random() * 10)
 
             except:
                 traceback.print_exc()
+                await asyncio.sleep(10)
 
     def get_canvas_from_coords(self, coords: tuple) -> Canvas:
         return next(
@@ -297,21 +326,15 @@ class AFD2022:
         ) as r:
             data = await r.json()
 
-            print(data)
-
             if errors := data.get("errors"):
-                print(f"{account.name} pixel place error: {errors}")
-
                 if errors[0]["message"] == "Ratelimited":
-                    return dt.fromtimestamp(
+                    account.next_at = dt.fromtimestamp(
                         data["errors"][0]["extensions"]["nextAvailablePixelTs"] / 1000
                     ).replace(tzinfo=tz.utc)
 
-            if data := data.get("data"):
-                print(
-                    f"{account.name} placed pixel {(pixel.canvas.dx + pixel.x, pixel.canvas.dy + pixel.y)}"
-                )
+                raise PixelPlaceException(errors)
 
+            if data := data.get("data"):
                 # if I dont go off server time sometimes I am too fast????
                 timestamp = data["act"]["data"][0]["data"][
                     "nextAvailablePixelTimestamp"
@@ -320,17 +343,11 @@ class AFD2022:
 
                 seconds = (timestamp - now) / 1000
 
-                await self.db.pixels.insert_one(
-                    {
-                        "x": pixel.canvas.dx + pixel.x,
-                        "y": pixel.canvas.dy + pixel.y,
-                        "color": pixel.color,
-                        "at": dt.utcnow(),
-                        "user_id": account.id,
-                    }
-                )
+                account.next_at = dt.now(tz.utc) + timedelta(seconds=seconds)
 
-                return dt.now(tz.utc) + timedelta(seconds=seconds)
+                return
+
+            print(data)
 
     async def update_template(self):
         while True:
