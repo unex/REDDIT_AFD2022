@@ -12,7 +12,13 @@ from random import random, sample
 
 import backoff
 import aiohttp
-from aiohttp import ClientResponseError, ClientSession, ClientTimeout, ClientWebSocketResponse, BasicAuth
+from aiohttp import (
+    ClientResponseError,
+    ClientSession,
+    ClientTimeout,
+    ClientWebSocketResponse,
+    BasicAuth,
+)
 from aiohttp_socks import ProxyConnector, ProxyConnectionError
 
 from fake_headers import Headers
@@ -202,9 +208,7 @@ class AFD2022:
         return None
 
     async def get_next_account(self):
-        cur = self.db.accounts.find(
-            {"refresh_token": {"$ne": None}}
-        ).sort("next_at", 1)
+        cur = self.db.accounts.find({"refresh_token": {"$ne": None}}).sort("next_at", 1)
 
         # print(await cur.to_list(10))
 
@@ -251,8 +255,7 @@ class AFD2022:
                     print(f"{account.name} failed to update token")
 
                     await self.db.accounts.find_one_and_update(
-                        {"id": account.id},
-                        {"$set": {"refresh_token": None}}
+                        {"id": account.id}, {"$set": {"refresh_token": None}}
                     )
 
                     continue
