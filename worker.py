@@ -8,7 +8,7 @@ from io import BytesIO
 from datetime import datetime as dt
 from datetime import timezone as tz
 from datetime import timedelta
-from random import random, sample
+from random import randint, sample
 
 import backoff
 import aiohttp
@@ -232,7 +232,8 @@ class AFD2022:
                 ).total_seconds()
 
                 if seconds > 0:
-                    jitter = 5 + random() * 100
+                    # avoid waiting `exactly` the right time
+                    jitter = randint(10, 30)
 
                     wait = seconds + jitter
 
@@ -285,7 +286,8 @@ class AFD2022:
                     {"$set": {"next_at": account.next_at.replace(tzinfo=None)}},
                 )
 
-                await asyncio.sleep(random() * 10)
+                # avoid hammering pixels
+                await asyncio.sleep(randint(5, 10))
 
             except:
                 traceback.print_exc()
