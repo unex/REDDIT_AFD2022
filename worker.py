@@ -233,7 +233,7 @@ class AFD2022:
 
                 if seconds > 0:
                     # avoid waiting `exactly` the right time
-                    jitter = randint(10, 30)
+                    jitter = randint(1, 10)
 
                     wait = seconds + jitter
 
@@ -241,7 +241,10 @@ class AFD2022:
                         f"Next: {account.name} at {account.next_at} ({int(wait)} seconds)"
                     )
 
-                    await asyncio.sleep(wait)
+                else:
+                    wait = randint(1, 30)
+
+                await asyncio.sleep(wait)
 
                 pixel = self.get_next_pixel()
 
