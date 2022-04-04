@@ -306,22 +306,22 @@ class AFD2022:
             return dt.now(tz.utc) + timedelta(seconds=seconds)
 
     async def update_template(self):
-        # async with self.session.get("https://haykam.com/place/template.png") as r:
-        # img_data = BytesIO(await r.content.read())
-        # img_data.seek(0)
+        async with self.session.get("https://haykam.com/place/template.png") as r:
+            img_data = BytesIO(await r.content.read())
+            img_data.seek(0)
 
-        # img = Image.open(img_data).convert("RGBA")
+            img = Image.open(img_data).convert("RGBA")
 
-        img = Image.open("./template.png").convert("RGBA")
-        np_img = np.array(img)
+            # img = Image.open("./template.png").convert("RGBA")
+            np_img = np.array(img)
 
-        coords = self._get_nontransparent_pixels(np_img)
+            coords = self._get_nontransparent_pixels(np_img)
 
-        self.template = []
-        for c in coords:
-            y, x = c
+            self.template = []
+            for c in coords:
+                y, x = c
 
-            self.template.append([c, np_img[y][x][:-1]])
+                self.template.append([c, np_img[y][x][:-1]])
 
 
 
