@@ -8,4 +8,4 @@ EXPOSE 8000
 RUN pip install pipenv
 RUN pipenv install --system --deploy
 
-CMD ["pipenv", "run", "prod"]
+CMD ["pipenv", "run", "web"]
