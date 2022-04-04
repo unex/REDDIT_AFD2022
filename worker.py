@@ -577,10 +577,10 @@ class AFD2022:
 
                             # print(f"{len(changes)} changed pixels")
 
-            except TypeError:
+            except TypeError as e:
                 msg = await self.ws.receive()
 
-                print(msg)
+                print(e, msg)
 
     def _get_nontransparent_pixels(self, img: np.ndarray) -> np.ndarray:
         x, y = np.where(np.all(img != (0, 0, 0, 0), axis=2))
