@@ -581,6 +581,7 @@ class AFD2022:
                 msg = await self.ws.receive()
 
                 print(e, msg)
+                traceback.print_exc()
 
     def _get_nontransparent_pixels(self, img: np.ndarray) -> np.ndarray:
         x, y = np.where(np.all(img != (0, 0, 0, 0), axis=2))
