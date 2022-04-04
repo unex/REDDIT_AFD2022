@@ -77,8 +77,22 @@ async def get_user(token):
 
 @app.get("/")
 async def root(request: Request, state: str = None, code: str = None):
-    if "name" in request.session:
-        return HTMLResponse(f"<code>Welcome {request.session['name']}</code>")
+    if uid := request.session.get("uid"):
+        user = await app.db.accounts.find_one({"id": uid})
+        len_pixels = await app.db.pixels.count_documents({"user_id": uid})
+        pixels = app.db.pixels.find({"user_id": uid}).sort("at", -1)
+
+        html = "<code>"
+        html += f"<pre>Welcome {user['name']} - {len_pixels} pixels placed</pre>"
+
+        html += "<pre>Latest pixels:\n"
+        for p in await pixels.to_list(50):
+            html += f"{p['at']} - ({p['x']}, {p['y']})\n"
+
+        html += "</pre>"
+        html += "</code>"
+
+        return HTMLResponse(html)
 
     if (
         code
@@ -107,7 +121,7 @@ async def root(request: Request, state: str = None, code: str = None):
                 upsert=True,
             )
 
-            request.session["name"] = user["name"]
+            request.session["uid"] = user["id"]
 
         except:
             traceback.print_exc()
