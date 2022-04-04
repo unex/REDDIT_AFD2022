@@ -2,7 +2,6 @@ from datetime import datetime
 from lib2to3.pgen2 import token
 import os
 import asyncio
-import time
 
 from typing import List, Dict
 from io import BytesIO
@@ -11,6 +10,7 @@ from datetime import timezone as tz
 from datetime import timedelta
 from random import random
 
+import backoff
 import aiohttp
 from aiohttp import ClientSession, ClientTimeout, ClientWebSocketResponse, BasicAuth
 from aiohttp_socks import ProxyConnector, ProxyConnectionError
@@ -28,7 +28,6 @@ from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
 REDDIT_CLIENT_ID = os.environ.get("REDDIT_CLIENT_ID")
 REDDIT_CLIENT_SECRET = os.environ.get("REDDIT_CLIENT_SECRET")
-REDDIT_REDIRECT_URI = os.environ.get("REDDIT_REDIRECT_URI")
 
 
 MONGO_URI = os.environ.get("MONGO_URI")
@@ -39,10 +38,6 @@ PROXY_URL = os.environ.get("PROXY_URL")
 REDDIT_TOKEN = os.environ.get("REDDIT_TOKEN")
 
 MONA_LISA_URI = "gql-realtime-2.reddit.com/query"
-
-
-# from urllib.parse import quote_plus
-# print(f"https://www.reddit.com/api/v1/authorize?client_id={REDDIT_CLIENT_ID}&response_type=code&redirect_uri={quote_plus(REDDIT_REDIRECT_URI)}&duration=permanent&scope=identity&state=a")
 
 # stupid
 # os.environ["TZ"] = "UTC"
@@ -58,6 +53,7 @@ fheader = Headers(
 class Color(BaseModel):
     hex: str
     index: int
+
 
 class RedditToken(BaseModel):
     refresh_token: str
@@ -86,11 +82,15 @@ class Pixel(BaseModel):
     canvas: Canvas
 
 
+class PixelPlaceException(Exception):
+    pass
+
 class RedditAccount:
-    def __init__(self, session, id, token, next_at) -> None:
+    def __init__(self, session, id, name, token, next_at) -> None:
         self._session: ClientSession = session
 
         self.id: str = id
+        self.name = name
         self._token: RedditToken = token
         self.next_at: datetime = next_at
 
@@ -153,10 +153,9 @@ class AFD2022:
         self.reddit = RedditAccount(
             session=self.session,
             id="",
-            token=RedditToken(
-                refresh_token=REDDIT_TOKEN
-            ),
-            next_at=None
+            name="",
+            token=RedditToken(refresh_token=REDDIT_TOKEN),
+            next_at=None,
         )
 
         await self.update_template()
@@ -192,30 +191,37 @@ class AFD2022:
 
     async def get_next_account(self):
         cur = self.db.accounts.find(
-            { "next_at": { "$lt": datetime.now(tz.utc) + timedelta(minutes=5) }}
-        ).sort("expires", 1)
+            {"next_at": {"$lt": datetime.now(tz.utc) + timedelta(minutes=5)}}
+        ).sort("next_at", 1)
+
+        # print(await cur.to_list(10))
 
         if doc := await cur.to_list(1):
             doc = doc[0]
             return RedditAccount(
                 session=self.session,
                 id=doc.get("id"),
+                name=doc["name"],
                 token=RedditToken(refresh_token=doc.get("refresh_token")),
-                next_at=doc.get("next_at")
+                next_at=doc.get("next_at"),
             )
 
     async def pixel_loop(self):
         try:
             while True:
                 if account := await self.get_next_account():
-                    seconds = (account.next_at.replace(tzinfo=tz.utc) - dt.now(tz.utc)).total_seconds()
+                    seconds = (
+                        account.next_at.replace(tzinfo=tz.utc) - dt.now(tz.utc)
+                    ).total_seconds()
 
                     if seconds > 0:
                         jitter = 5 + random() * 100
 
                         wait = seconds + jitter
 
-                        print(f"Next at: {account.next_at} ({int(wait)} seconds)")
+                        print(
+                            f"Next: {account.name} at {account.next_at} ({int(wait)} seconds)"
+                        )
 
                         await asyncio.sleep(wait)
 
@@ -223,37 +229,16 @@ class AFD2022:
 
                     next_at = await self.place_pixel(account, pixel)
 
-                    await self.db.accounts.find_one_and_update(
-                        {"id": account.id},
-                        {"$set": {"next_at": next_at}}
-                    )
+                    print(f"{account.name} next_at {next_at} ")
 
-                    print(f"Placed pixel {(pixel.x, pixel.y)}")
+                    await self.db.accounts.find_one_and_update(
+                        {"id": account.id}, {"$set": {"next_at": next_at.replace(tzinfo=None)}}
+                    )
 
                 else:
                     await asyncio.sleep(60)
-            # while True:
-            #     if self.next_at:
-            #         # print("now ", datetime.utcnow(tz.utc), datetime.utcnow(tz.utc).timestamp())
-            #         # print("next", self.next_at, self.next_at.timestamp())
 
-            #         sleep_until = (
-            #             self.next_at.timestamp() - datetime.utcnow(tz.utc).timestamp()
-            #         )
-
-            #         jitter = 5 + random() * 100
-
-            #         sleep_until += jitter
-
-            #         print(f"Next at: {self.next_at} ({int(sleep_until)} seconds)")
-
-            #         await asyncio.sleep(sleep_until)
-
-            #     pixel = self.get_next_pixel()
-
-            #     self.next_at = await self.place_pixel(pixel)
-
-            #     print(f"Placed pixel {(pixel.x, pixel.y)}")
+                await asyncio.sleep(random() * 10)
 
         except:
             import traceback
@@ -269,6 +254,7 @@ class AFD2022:
             )
         )
 
+    @backoff.on_exception(backoff.expo, (aiohttp.ClientError, asyncio.exceptions.TimeoutError), max_time=60)
     async def place_pixel(self, account: RedditAccount, pixel: Pixel) -> None:
         token = await account.token()
 
@@ -293,17 +279,30 @@ class AFD2022:
         ) as r:
             data = await r.json()
 
-            # print(data)
+            print(data)
 
-            # if I dont go off server time sometimes I am too fast????
-            timestamp = data["data"]["act"]["data"][0]["data"][
-                "nextAvailablePixelTimestamp"
-            ]
-            now = data["data"]["act"]["data"][1]["data"]["timestamp"]
+            if errors := data.get("errors"):
+                print(f"{account.name} pixel place error: {errors}")
 
-            seconds = (timestamp - now) / 1000
+                if errors[0]["message"] == "Ratelimited":
+                    return dt.fromtimestamp(
+                        data["errors"][0]["extensions"]["nextAvailablePixelTs"] / 1000
+                    ).replace(tzinfo=tz.utc)
 
-            return dt.now(tz.utc) + timedelta(seconds=seconds)
+            if data := data.get("data"):
+                print(
+                    f"{account.name} placed pixel {(pixel.canvas.dx + pixel.x, pixel.canvas.dy + pixel.y)}"
+                )
+
+                # if I dont go off server time sometimes I am too fast????
+                timestamp = data["act"]["data"][0]["data"][
+                    "nextAvailablePixelTimestamp"
+                ]
+                now = data["act"]["data"][1]["data"]["timestamp"]
+
+                seconds = (timestamp - now) / 1000
+
+                return dt.now(tz.utc) + timedelta(seconds=seconds)
 
     async def update_template(self):
         async with self.session.get("https://haykam.com/place/template.png") as r:
@@ -322,8 +321,6 @@ class AFD2022:
                 y, x = c
 
                 self.template.append([c, np_img[y][x][:-1]])
-
-
 
     async def _ws_connect(self):
         token = await self.reddit.token()
