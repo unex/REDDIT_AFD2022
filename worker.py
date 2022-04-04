@@ -181,11 +181,20 @@ class AFD2022:
 
             color_mapping = {c.hex: c.index for c in self.colors}
 
+            hex_color = "#%02x%02x%02x".upper() % tuple(color)
+
+            try:
+                color_index = color_mapping["#%02x%02x%02x".upper() % tuple(color)]
+            except KeyError:
+                print(f"Template has invalid pixel color ({hex_color}) at {(x, y)}")
+                continue
+
             if not all(canvas.data[cy][cx] == color):
+                print(f"Pixel at {(x, y)} is {canvas.data[cy][cx]}, should be {color}")
                 return Pixel(
                     x=cx,
                     y=cy,
-                    color=color_mapping["#%02x%02x%02x".upper() % tuple(color)],
+                    color=color_index,
                     canvas=canvas,
                 )
 
