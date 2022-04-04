@@ -199,6 +199,8 @@ class AFD2022:
                     canvas=canvas,
                 )
 
+        return None
+
     async def get_next_account(self):
         cur = self.db.accounts.find(
             {"next_at": {"$lt": datetime.now(tz.utc) + timedelta(minutes=5)}}
