@@ -237,7 +237,10 @@ class AFD2022:
 
                     pixel = self.get_next_pixel()
 
-                    next_at = await self.place_pixel(account, pixel)
+                    if not pixel:
+                        print("No next pixel! Waiting...")
+                        await asyncio.sleep(30)
+                        continue
 
                     print(f"{account.name} next_at {next_at} ")
 
