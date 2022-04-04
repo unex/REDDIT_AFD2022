@@ -315,6 +315,16 @@ class AFD2022:
 
                 seconds = (timestamp - now) / 1000
 
+                await self.db.pixels.insert_one(
+                    {
+                        "x": pixel.canvas.dx + pixel.x,
+                        "y": pixel.canvas.dy + pixel.y,
+                        "color": pixel.color,
+                        "at": dt.utcnow(),
+                        "user_id": account.id,
+                    }
+                )
+
                 return dt.now(tz.utc) + timedelta(seconds=seconds)
 
     async def update_template(self):
