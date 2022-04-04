@@ -479,9 +479,10 @@ class AFD2022:
                             for c in x:
                                 i = c["index"]
 
-                                canvas = Canvas(dx=c["dx"], dy=c["dy"], index=i)
+                                if i not in self.canvas:
+                                    canvas = Canvas(dx=c["dx"], dy=c["dy"], index=i)
 
-                                self.canvas[i] = canvas
+                                    self.canvas[i] = canvas
 
                                 await self.ws.send_json(
                                     {
