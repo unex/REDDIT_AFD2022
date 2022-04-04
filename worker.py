@@ -8,7 +8,7 @@ from io import BytesIO
 from datetime import datetime as dt
 from datetime import timezone as tz
 from datetime import timedelta
-from random import random
+from random import random, sample
 
 import backoff
 import aiohttp
@@ -170,7 +170,7 @@ class AFD2022:
         asyncio.create_task(self.pixel_loop())
 
     def get_next_pixel(self):
-        for p in self.template:
+        for p in sample(self.template, len(self.template)):
             coord, color = p
             y, x = coord
 
