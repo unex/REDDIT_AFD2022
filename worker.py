@@ -279,7 +279,7 @@ class AFD2022:
                     )
 
                 except PixelPlaceException as e:
-                    print(f"pixel place error: {e}")
+                    print(f"{account.name} pixel place error: {e}")
 
                 await self.db.accounts.find_one_and_update(
                     {"id": account.id},
