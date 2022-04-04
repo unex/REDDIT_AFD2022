@@ -263,7 +263,7 @@ class AFD2022:
             )
         )
 
-    @backoff.on_exception(backoff.expo, (aiohttp.ClientError, asyncio.exceptions.TimeoutError), max_time=60)
+    @backoff.on_exception(backoff.expo, (aiohttp.ClientError, asyncio.exceptions.TimeoutError), max_tries=10)
     async def place_pixel(self, account: RedditAccount, pixel: Pixel) -> None:
         token = await account.token()
 
