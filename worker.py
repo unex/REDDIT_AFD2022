@@ -159,7 +159,7 @@ class AFD2022:
             next_at=None,
         )
 
-        await self.update_template()
+        asyncio.create_task(self.update_template())
 
         await self._ws_connect()
         await self._ws_subscribe()
@@ -318,22 +318,34 @@ class AFD2022:
                 return dt.now(tz.utc) + timedelta(seconds=seconds)
 
     async def update_template(self):
-        async with self.session.get("https://haykam.com/place/template.png") as r:
-            img_data = BytesIO(await r.content.read())
-            img_data.seek(0)
+        while True:
+            try:
+                async with self.session.get(
+                    "https://haykam.com/place/template.png"
+                ) as r:
+                    img_data = BytesIO(await r.content.read())
+                    img_data.seek(0)
 
-            img = Image.open(img_data).convert("RGBA")
+                    img = Image.open(img_data).convert("RGBA")
 
-            # img = Image.open("./template.png").convert("RGBA")
-            np_img = np.array(img)
+                    # img = Image.open("./template.png").convert("RGBA")
+                    np_img = np.array(img)
 
-            coords = self._get_nontransparent_pixels(np_img)
+                    coords = self._get_nontransparent_pixels(np_img)
 
-            self.template = []
-            for c in coords:
-                y, x = c
+                    template = []
+                    for c in coords:
+                        y, x = c
 
-                self.template.append([c, np_img[y][x][:-1]])
+                        template.append([c, np_img[y][x][:-1]])
+
+                    self.template = template
+
+            except:
+                print("Error in update_template")
+                traceback.print_exc()
+
+            await asyncio.sleep(60 * 10)
 
     async def _ws_connect(self):
         token = await self.reddit.token()
