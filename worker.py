@@ -304,7 +304,7 @@ class AFD2022:
 
     @backoff.on_exception(
         backoff.expo,
-        (aiohttp.ClientError, asyncio.exceptions.TimeoutError),
+        (aiohttp.ClientError, asyncio.exceptions.TimeoutError, ConnectionError),
         max_tries=10,
     )
     async def place_pixel(self, account: RedditAccount, pixel: Pixel) -> None:
