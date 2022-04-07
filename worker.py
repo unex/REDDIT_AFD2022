@@ -3,7 +3,7 @@ import os
 import asyncio
 import traceback
 
-from typing import List, Dict
+from typing import List, Dict, Optional
 from io import BytesIO
 from datetime import datetime as dt
 from datetime import timezone as tz
@@ -185,7 +185,7 @@ class AFD2022:
 
         asyncio.create_task(self.pixel_loop())
 
-    def get_next_pixel(self):
+    def get_next_pixel(self) -> Optional[Pixel]:
         # shuffle template so we dont try to draw the same pixel over and over
         for p in sample(self.template, len(self.template)):
             coord, color = p
@@ -203,7 +203,7 @@ class AFD2022:
 
             # check if this is a valid color
             try:
-                color_index = color_mapping["#%02x%02x%02x".upper() % tuple(color)]
+                color_index = color_mapping[hex_color]
             except KeyError:
                 print(f"Template has invalid pixel color ({hex_color}) at {(x, y)}")
                 continue
@@ -220,7 +220,7 @@ class AFD2022:
 
         return None
 
-    async def get_next_account(self):
+    async def get_next_account(self) -> Optional[RedditAccount]:
         # get accounts with 'valid' refresh token
         cur = self.db.accounts.find({"refresh_token": {"$ne": None}}).sort("next_at", 1)
 
@@ -396,10 +396,8 @@ class AFD2022:
                     coords = self._get_nontransparent_pixels(np_img)
 
                     template = []
-                    for c in coords:
-                        y, x = c
-
-                        template.append([c, np_img[y][x][:-1]])
+                    for (y, x) in coords:
+                        template.append([(y, x), np_img[y][x][:-1]])
 
                     self.template = template
 
@@ -597,11 +595,9 @@ class AFD2022:
                             changes = self._get_nontransparent_pixels(np_img)
 
                             # update changed pixels
-                            for c in changes:
-                                x, y = c
-
+                            for (y, x) in changes:
                                 i = int(_id.replace("canvas", ""))
-                                self.canvas[i].data[x][y] = np_img[x][y][:-1]
+                                self.canvas[i].data[y][x] = np_img[y][x][:-1]
 
                             # print(f"{len(changes)} changed pixels")
 
