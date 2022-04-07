@@ -129,20 +129,27 @@ class AFD2022:
         self.proxy: ClientSession = None
         self.ws: ClientWebSocketResponse = None
 
+        # the template to draw, <coords>, <pixel>
         self.template: List[list, list] = []
 
+        # list of colors we can draw
         self.colors: List[Color] = []
 
+        # indexed array of canvases
         self.canvas: Dict[int, Canvas()] = {}
 
+        # reddit account used to connect to the websocket
         self.reddit: RedditAccount = None
 
+        # width and height for all canvases
         self.width: int = 1000
         self.height: int = 1000
 
+        # database
         self.db: AsyncIOMotorDatabase = None
 
     async def run(self):
+        # connect to database
         mongo = AsyncIOMotorClient(MONGO_URI)
         await mongo.admin.command("ismaster")
 
@@ -150,6 +157,7 @@ class AFD2022:
 
         print("Connected to mongo")
 
+        # init web sessions
         self.session = ClientSession()
 
         self.proxy = ClientSession(
@@ -157,6 +165,7 @@ class AFD2022:
             timeout=ClientTimeout(connect=30),
         )
 
+        # init reddit
         self.reddit = RedditAccount(
             session=self.session,
             id="",
@@ -177,6 +186,7 @@ class AFD2022:
         asyncio.create_task(self.pixel_loop())
 
     def get_next_pixel(self):
+        # shuffle template so we dont try to draw the same pixel over and over
         for p in sample(self.template, len(self.template)):
             coord, color = p
             y, x = coord
@@ -188,14 +198,17 @@ class AFD2022:
 
             color_mapping = {c.hex: c.index for c in self.colors}
 
+            # convert (r,g,b) to hex
             hex_color = "#%02x%02x%02x".upper() % tuple(color)
 
+            # check if this is a valid color
             try:
                 color_index = color_mapping["#%02x%02x%02x".upper() % tuple(color)]
             except KeyError:
                 print(f"Template has invalid pixel color ({hex_color}) at {(x, y)}")
                 continue
 
+            # if template color does not match color on canvas, return this pixel
             if not all(canvas.data[cy][cx] == color):
                 print(f"Pixel at {(x, y)} is {canvas.data[cy][cx]}, should be {color}")
                 return Pixel(
@@ -208,6 +221,7 @@ class AFD2022:
         return None
 
     async def get_next_account(self):
+        # get accounts with 'valid' refresh token
         cur = self.db.accounts.find({"refresh_token": {"$ne": None}}).sort("next_at", 1)
 
         # print(await cur.to_list(10))
@@ -227,6 +241,7 @@ class AFD2022:
             try:
                 account = await self.get_next_account()
 
+                # get the seconds to wait until this account can place a pixel again
                 seconds = (
                     account.next_at.replace(tzinfo=tz.utc) - dt.now(tz.utc)
                 ).total_seconds()
@@ -253,6 +268,7 @@ class AFD2022:
                     await asyncio.sleep(30)
                     continue
 
+                # ensure the token is valid before we try to use it, so we can catch the exception if it fails
                 try:
                     await account.token()
                 except ClientResponseError as e:
@@ -493,6 +509,7 @@ class AFD2022:
 
                                     self.canvas[i] = canvas
 
+                                # subscribe to canvas
                                 await self.ws.send_json(
                                     {
                                         "id": f"canvas{i}",
@@ -579,6 +596,7 @@ class AFD2022:
 
                             changes = self._get_nontransparent_pixels(np_img)
 
+                            # update changed pixels
                             for c in changes:
                                 x, y = c
 
